@@ -1,0 +1,120 @@
+# docker-compose.override.yml
+version: '3.1'
+
+services:
+
+  spark-master:
+    image: bitnami/spark:latest
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_MASTER_WEBUI_PORT=8081
+    ports:
+      - "8081:8081"
+      - "7077:7077"
+    volumes:
+      - spark-data:/bitnami
+      - ./include:/usr/local/airflow/include
+      - ./plugins:/usr/local/airflow/plugins
+      - ./apps:/opt/spark-apps
+      - ./data:/opt/spark-data
+    networks:
+      - airflow
+
+  spark-worker:
+    image: bitnami/spark:latest
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=2
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    volumes:
+      - ./include:/usr/local/airflow/include
+      - ./plugins:/usr/local/airflow/plugins
+      - spark-data:/bitnami
+      - ./apps:/opt/spark-apps
+      - ./data:/opt/spark-data
+    depends_on:
+      - spark-master
+    networks:
+      - airflow
+
+  # postgres:
+  #   container_name: container-pg
+  #   image: postgres
+  #   hostname: postgres
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     POSTGRES_USER: admin
+  #     POSTGRES_PASSWORD: root
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #     - ./include:/user/local/airflow/include
+  #   networks:
+  #     - airflow
+
+  pgadmin:
+    container_name: container-pgadmin
+    image: dpage/pgadmin4
+    depends_on:
+      - postgres
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    volumes:
+      - ./include:/user/local/airflow/include
+      - ./plugins:/usr/local/airflow/plugins
+    networks:
+      - airflow
+
+
+  pg_grafana:
+    container_name: pg_grafana
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_DB: my_grafana_db
+      POSTGRES_USER: my_grafana_user
+      POSTGRES_PASSWORD: my_grafana_pwd
+    ports:
+      - "5499:5432"
+    volumes:
+      - pg_grafana:/var/lib/postgresql/data
+    networks:
+      - airflow
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:latest
+    user: "0:0"
+    environment:
+      GF_DATABASE_TYPE: postgres
+      GF_DATABASE_HOST: pg_grafana:5432
+      GF_DATABASE_NAME: my_grafana_db
+      GF_DATABASE_USER: my_grafana_user
+      GF_DATABASE_PASSWORD: my_grafana_pwd
+      GF_DATABASE_SSL_MODE: disable
+    restart: unless-stopped
+    depends_on:
+        - pg_grafana
+    ports:
+      - 3111:3000
+    volumes:
+      - grafana:/var/lib/grafana
+    networks:
+      - airflow
+
+volumes:
+  spark-data:
+  postgres_data:
+  pg_grafana:
+  grafana:
